@@ -1,0 +1,181 @@
+"""Daily Task Manager (PS 32)
+
+Console task manager. Each task has an ID, title, priority and due date.
+Tasks are stored as dictionaries in a list and saved to tasks.txt after
+every change.
+
+File format (one task per line):  ID|title|priority|due|status
+"""
+
+import re
+from datetime import datetime
+
+FILE_NAME = "tasks.txt"
+SEP = " \u2502 "            # the " │ " separator used in the expected output
+PRIORITIES = ["High", "Medium", "Low"]
+PRIORITY_ORDER = {"High": 0, "Medium": 1, "Low": 2}
+FIRST_ID = 101
+
+
+# ---------- file handling ----------
+
+def load_tasks():
+    """Read tasks from the file. A missing or empty file gives an empty list."""
+    tasks = []
+    try:
+        with open(FILE_NAME, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                parts = line.split("|")
+                if len(parts) != 5:
+                    continue                      # skip malformed lines
+                tasks.append({
+                    "id": parts[0],
+                    "title": parts[1],
+                    "priority": parts[2],
+                    "due": parts[3],
+                    "status": parts[4],
+                })
+    except FileNotFoundError:
+        pass
+    return tasks
+
+
+def save_tasks(tasks):
+    """Write all tasks to the file."""
+    with open(FILE_NAME, "w", encoding="utf-8") as f:
+        for t in tasks:
+            f.write("|".join([t["id"], t["title"], t["priority"],
+                              t["due"], t["status"]]) + "\n")
+
+
+# ---------- helpers ----------
+
+def next_id(tasks):
+    """Highest existing number + 1 (T101 for an empty list)."""
+    numbers = [int(t["id"][1:]) for t in tasks if t["id"][1:].isdigit()]
+    return "T" + str(max(numbers) + 1 if numbers else FIRST_ID)
+
+
+def valid_date(text):
+    """True only for a real calendar date written as YYYY-MM-DD."""
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
+        return False
+    try:
+        datetime.strptime(text, "%Y-%m-%d")
+        return True
+    except ValueError:
+        return False
+
+
+def format_task(t, show_status=True):
+    fields = [t["id"], t["title"], t["priority"], t["due"]]
+    if show_status:
+        fields.append(t["status"])
+    return SEP.join(fields)
+
+
+def pending_count(tasks):
+    return sum(1 for t in tasks if t["status"] == "Pending")
+
+
+# ---------- features ----------
+
+def add_task(tasks):
+    title = input("Title: ").strip()
+    if not title:
+        print("Title cannot be empty.")
+        return
+    if "|" in title or "\u2502" in title:
+        print("Title cannot contain | characters.")
+        return
+
+    priority = input("Priority: ").strip().capitalize()
+    if priority not in PRIORITIES:
+        print("Invalid priority. Enter High, Medium or Low.")
+        return
+
+    due = input("Due: ").strip()
+    if not valid_date(due):
+        print("Invalid date. Use YYYY-MM-DD.")
+        return
+
+    task = {"id": next_id(tasks), "title": title, "priority": priority,
+            "due": due, "status": "Pending"}
+    tasks.append(task)
+    save_tasks(tasks)
+    print("Task added.")
+    print(format_task(task))
+
+
+def view_by_priority(tasks):
+    if not tasks:
+        print("No tasks found.")
+        return
+    # High -> Medium -> Low; within a priority, earliest due date first
+    ordered = sorted(tasks, key=lambda t: (PRIORITY_ORDER.get(t["priority"], 3),
+                                           t["due"]))
+    for t in ordered:
+        print(format_task(t, show_status=False))
+
+
+def show_pending(tasks):
+    pending = [t for t in tasks if t["status"] == "Pending"]
+    if not pending:
+        print("No pending tasks. You are all caught up!")
+        return
+    for t in pending:
+        print(format_task(t, show_status=False))
+
+
+def complete_task(tasks):
+    task_id = input("Task ID: ").strip().upper()
+    for t in tasks:
+        if t["id"] == task_id:
+            if t["status"] == "Done":
+                print("Task " + task_id + " is already done.")
+                return
+            t["status"] = "Done"
+            save_tasks(tasks)
+            print("Task " + task_id + " marked as done. Pending tasks: "
+                  + str(pending_count(tasks)))
+            return
+    print("Task " + task_id + " not found.")
+
+
+# ---------- main ----------
+
+def main():
+    tasks = load_tasks()
+    while True:
+        print()
+        print("1. Add ")
+        print("2 View by priority")
+        print("3 Show pending")print("4. Complete")
+        print("5. Exit")
+        try:
+            choice = input("Choice: ").strip()
+        except EOFError:
+            break
+        try:
+            if choice == "1":
+                add_task(tasks)
+            elif choice == "2":
+                view_by_priority(tasks)
+            elif choice == "3":
+                show_pending(tasks)
+            elif choice == "4":
+                complete_task(tasks)
+            elif choice == "5":
+                print("Goodbye!")
+                break
+            else:
+                print("Invalid choice. Enter 1, 2, 3, 4 or 5.")
+        except EOFError:
+            break
+
+
+if __name__ == "__main__":
+    main()
